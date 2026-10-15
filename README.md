@@ -33,6 +33,16 @@ The `scripts/SecureBootCheck.ps1` script checks whether the Windows UEFI CA 2023
 
 The script logs results to `C:\ProgramData\SecureBootCheck.txt` and exits with code 0 if the certificate is present, or 1 if missing, unsupported, or an error occurred (e.g., Legacy BIOS).
 
+## Set-NeverSleep
+
+The `scripts/Set-NeverSleep.ps1` script sets Sleep, Hibernate, and Hybrid Sleep to Never on all power plans (AC + DC) and disables hibernation completely (removes hiberfil.sys, disables Fast Startup). This can be executed remotely as SYSTEM via Deep Freeze Cloud:
+
+    powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "iex (irm 'https://raw.githubusercontent.com/usmansshaikh/faronicssupport/main/scripts/Set-NeverSleep.ps1')"
+
+**Note:** Thaw PCs before running this script, as it modifies system power settings and requires write access.
+
+The script logs activity to `C:\Windows\Temp\Set-NeverSleep.log`.
+
 ## Auto-logon
 
 Auto-logon is deliberately kept separate because a public GitHub repository must not contain the Public account password. Use Microsoft Sysinternals Autologon or another centrally managed credential mechanism.
