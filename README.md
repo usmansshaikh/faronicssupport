@@ -25,6 +25,14 @@ Example, replace OWNER/REPO as required:
 
 The scripts target only the specified Public user's registry hive. Administrator accounts are not intentionally restricted.
 
+## Secure Boot Check
+
+The `scripts/SecureBootCheck.ps1` script checks whether the Windows UEFI CA 2023 certificate is present in the Secure Boot db. This is a read-only diagnostic that can be executed remotely as SYSTEM via Deep Freeze Cloud:
+
+    powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "iex (irm 'https://raw.githubusercontent.com/usmansshaikh/faronicssupport/main/scripts/SecureBootCheck.ps1')"
+
+The script logs results to `C:\ProgramData\SecureBootCheck.txt` and exits with code 0 if the certificate is present, or 1 if missing, unsupported, or an error occurred (e.g., Legacy BIOS).
+
 ## Auto-logon
 
 Auto-logon is deliberately kept separate because a public GitHub repository must not contain the Public account password. Use Microsoft Sysinternals Autologon or another centrally managed credential mechanism.
