@@ -43,6 +43,14 @@ The `scripts/Set-NeverSleep.ps1` script sets Sleep, Hibernate, and Hybrid Sleep 
 
 The script logs activity to `C:\Windows\Temp\Set-NeverSleep.log`.
 
+## Install-Schoolyear
+
+The `Install-Schoolyear.bat` script provides one-run install/upgrade of Schoolyear Exams MSI (3.21.7) for Deep Freeze Cloud Batch scripts. It handles all installation states: not installed, same version, and other version. The script automatically stops Schoolyear processes and services, uninstalls any existing version, and installs the target version. This can be executed remotely as SYSTEM via Deep Freeze Cloud:
+
+    https://raw.githubusercontent.com/usmansshaikh/faronicssupport/main/Install-Schoolyear.bat
+
+The script logs activity to `C:\Windows\Temp\Schoolyear_Upgrade.log` (plus verbose msiexec logs).
+
 ## Auto-logon
 
 Auto-logon is deliberately kept separate because a public GitHub repository must not contain the Public account password. Use Microsoft Sysinternals Autologon or another centrally managed credential mechanism.
