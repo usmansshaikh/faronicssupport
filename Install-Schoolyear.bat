@@ -7,21 +7,21 @@ exit /b %ERRORLEVEL%
 
 # ============================================================
 # Install-Schoolyear.bat
-# One run, any state: not installed, older, same or newer version.
-#  - Already on the target version  -> nothing to do, exit 0
+# One run, any state. The version is read from Schoolyear.msi itself,
+# so to roll out a new release just replace Schoolyear.msi on the share.
+#  - Same or newer version installed -> nothing to do, exit 0
 #  - Not installed                   -> install
 #  - Other version(s) installed      -> stop app + service, uninstall, wait, install
 # Waits for Windows Installer to be free and retries on 1618.
 # Logs: C:\Windows\Temp\Schoolyear_Upgrade.log (+ msiexec verbose logs)
 # ============================================================
 
-$TargetVersion = '3.21.7'
-$MsiName       = "schoolyear-exams-win-$TargetVersion.msi"
+$MsiName       = 'Schoolyear.msi'
 $MsiSources    = @(
     "\\172.19.130.99\systeem\$MsiName",
     "\\172.19.130.99\systeem\map\$MsiName"
 )
-$ForceReinstall = $false   # set to $true to reinstall even if already on the target version
+$ForceReinstall = $false   # set to $true to reinstall even if the same or a newer version is installed
 
 $TempDir      = 'C:\Windows\Temp'
 $LocalMsi     = Join-Path $TempDir $MsiName
@@ -45,6 +45,29 @@ function Get-SchoolyearInstalls {
     Get-ItemProperty $paths -ErrorAction SilentlyContinue |
         Where-Object { $_.DisplayName -like '*Schoolyear*' -and $_.PSChildName -match '^\{[0-9A-Fa-f-]{36}\}$' } |
         Select-Object @{n='Code';e={$_.PSChildName}}, DisplayName, DisplayVersion
+}
+
+function Get-MsiProperty([string]$Path, [string]$Property) {
+    $wi = New-Object -ComObject WindowsInstaller.Installer
+    $db = $null; $view = $null; $rec = $null
+    try {
+        $db   = $wi.GetType().InvokeMember('OpenDatabase', 'InvokeMethod', $null, $wi, @($Path, 0))
+        $view = $db.GetType().InvokeMember('OpenView', 'InvokeMethod', $null, $db, @("SELECT Value FROM Property WHERE Property='$Property'"))
+        $view.GetType().InvokeMember('Execute', 'InvokeMethod', $null, $view, $null) | Out-Null
+        $rec  = $view.GetType().InvokeMember('Fetch', 'InvokeMethod', $null, $view, $null)
+        $val  = if ($rec) { $rec.GetType().InvokeMember('StringData', 'GetProperty', $null, $rec, 1) } else { $null }
+        $view.GetType().InvokeMember('Close', 'InvokeMethod', $null, $view, $null) | Out-Null
+        return $val
+    } finally {
+        foreach ($o in @($rec, $view, $db, $wi)) { if ($o) { [void][Runtime.InteropServices.Marshal]::FinalReleaseComObject($o) } }
+        [GC]::Collect(); [GC]::WaitForPendingFinalizers()
+    }
+}
+
+function ConvertTo-Version([string]$v) {
+    $parsed = $null
+    if ($v -and [version]::TryParse(($v -replace '[^0-9.]', ''), [ref]$parsed)) { return $parsed }
+    return $null
 }
 
 function Wait-MsiFree([int]$TimeoutSec = 600) {
@@ -89,7 +112,7 @@ function Stop-Schoolyear {
 
 try {
     Log '============================================================'
-    Log "Schoolyear install/upgrade to $TargetVersion on $env:COMPUTERNAME as $env:USERNAME"
+    Log "Schoolyear install/upgrade on $env:COMPUTERNAME as $env:USERNAME"
 
     $isAdmin = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
     if (-not $isAdmin) { Log 'ERROR: must run as Administrator or SYSTEM.'; exit 1 }
@@ -99,17 +122,27 @@ try {
     if ($installed.Count -eq 0) { Log 'Schoolyear is not installed.' }
     else { $installed | ForEach-Object { Log "Found: $($_.DisplayName) $($_.DisplayVersion) $($_.Code)" } }
 
-    $onTarget = @($installed | Where-Object { $_.DisplayVersion -eq $TargetVersion })
-    if (-not $ForceReinstall -and $installed.Count -gt 0 -and $onTarget.Count -eq $installed.Count) {
-        Log "Already on $TargetVersion. Nothing to do."
-        exit 0
-    }
-
-    # --- Get the MSI locally ---
+    # --- Get the MSI locally and read its version ---
     $src = $MsiSources | Where-Object { Test-Path -LiteralPath $_ } | Select-Object -First 1
     if (-not $src) { Log "ERROR: MSI not found or share not reachable: $($MsiSources -join ' ; ')"; exit 2 }
     Log "Copying $src to $LocalMsi"
     Copy-Item -LiteralPath $src -Destination $LocalMsi -Force -ErrorAction Stop
+
+    $TargetVersion = Get-MsiProperty $LocalMsi 'ProductVersion'
+    $target = ConvertTo-Version $TargetVersion
+    if (-not $target) { Log "ERROR: could not read ProductVersion from $LocalMsi"; exit 4 }
+    Log "Schoolyear.msi is version $TargetVersion"
+
+    $needsWork = $installed.Count -eq 0
+    foreach ($i in $installed) {
+        $iv = ConvertTo-Version $i.DisplayVersion
+        if (-not $iv -or $iv -lt $target) { $needsWork = $true }
+    }
+    if (-not $ForceReinstall -and -not $needsWork) {
+        Log "Installed version is $TargetVersion or newer. Nothing to do."
+        Remove-Item -LiteralPath $LocalMsi -Force -ErrorAction SilentlyContinue
+        exit 0
+    }
 
     # --- Remove whatever is there ---
     if ($installed.Count -gt 0) {
@@ -131,7 +164,7 @@ try {
     if ($OkCodes -notcontains $code -or $code -eq 1605) { Log "ERROR: install failed ($code). See $InstallLog"; exit $code }
 
     # --- Verify ---
-    $after = @(Get-SchoolyearInstalls | Where-Object { $_.DisplayVersion -eq $TargetVersion })
+    $after = @(Get-SchoolyearInstalls | Where-Object { (ConvertTo-Version $_.DisplayVersion) -eq $target })
     if ($after.Count -eq 0) { Log "ERROR: install reported $code but $TargetVersion is not registered."; exit 3 }
     Log "SUCCESS: Schoolyear $TargetVersion installed (exit $code)."
     if ($code -in 1641, 3010) { Log 'A restart is needed to finish.' }
