@@ -45,7 +45,7 @@ The script logs activity to `C:\Windows\Temp\Set-NeverSleep.log`.
 
 ## Install-Schoolyear
 
-The `Install-Schoolyear.bat` script provides one-run install/upgrade of Schoolyear Exams MSI (3.21.7) for Deep Freeze Cloud Batch scripts. It handles all installation states: not installed, same version, and other version. The script automatically stops Schoolyear processes and services, uninstalls any existing version, and installs the target version. This can be executed remotely as SYSTEM via Deep Freeze Cloud:
+The `Install-Schoolyear.bat` script installs or upgrades Schoolyear from Schoolyear.msi on the share. The script reads the target version from the MSI itself, skips PCs already on that version or newer, and automatically handles process/service management and uninstall/install sequencing. This can be executed remotely as SYSTEM via Deep Freeze Cloud:
 
     https://raw.githubusercontent.com/usmansshaikh/faronicssupport/main/Install-Schoolyear.bat
 
