@@ -33,7 +33,7 @@ $OkCodes = @(0, 1605, 1641, 3010)   # success, not installed, success+restart
 
 function Log([string]$m) {
     $line = "[{0}] {1}" -f (Get-Date -Format 'yyyy-MM-dd HH:mm:ss'), $m
-    Write-Output $line
+    Write-Host $line
     Add-Content -Path $MainLog -Value $line -ErrorAction SilentlyContinue
 }
 
